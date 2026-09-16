@@ -109,7 +109,10 @@ func lookup(k string, kunreiOn bool) (string, bool) {
 func toHiragana(s string) []rune {
 	rs := []rune(s)
 	for i, r := range rs {
-		if r >= 'ァ' && r <= 'ヶ' {
+		// ヴ is the last katakana folded: ヵ and ヶ, which follow it, are not
+		// rows of the 本表 but abbreviations of 箇 (三ヶ月, 茅ヶ崎) read か/が,
+		// so they pass through instead of becoming ゕ/ゖ.
+		if r >= 'ァ' && r <= 'ヴ' {
 			rs[i] = r - 0x60
 		}
 	}

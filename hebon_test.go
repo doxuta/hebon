@@ -216,6 +216,13 @@ func TestStylesAndEdges(t *testing.T) {
 		{"おおお", Options{Style: Doubled}, "ooo"},
 		// Small kana alone and historical kana.
 		{"ぁゐゑ", Options{}, "aie"},
+		// ヵ/ヶ are not rows of the 本表: in 三ヶ月, 茅ヶ崎 they abbreviate 箇
+		// and are read か/が, not the small kana their codepoints are named
+		// after. They pass through, unfolded (README, Limitations).
+		{"三ヶ月", Options{}, "三ヶ月"},
+		{"ヵヶ", Options{}, "ヵヶ"},
+		// ヴ is the last katakana that does fold.
+		{"ヴ", Options{}, "vu"},
 	}
 	for _, tc := range cases {
 		if got := Romaji(tc.kana, tc.opt); got != tc.want {
