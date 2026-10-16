@@ -146,21 +146,24 @@ func mark(v rune, s Style) rune {
 
 // Romaji converts hiragana or katakana to romaji under the notice. Anything
 // that is not kana passes through unchanged, except 、。　 which become
-// , . and a space (添え書き 7). An ASCII or typographic apostrophe in the
-// input marks a sound break (添え書き 4): it stops two vowels from merging
+// , . and a space (添え書き 7). An ASCII or typographic apostrophe between
+// two kana marks a sound break (添え書き 4): it stops two vowels from merging
 // into a long vowel and is written out only where the letters would
-// otherwise be misread (おお'おじ → oo'oji, but ōoji with a macron).
+// otherwise be misread (おお'おじ → oo'oji, but ōoji with a macron). The
+// particle を is such a break on its own (うたをうたう → utao'utau). An
+// apostrophe anywhere else (Don't) passes through.
 func Romaji(kana string, opt Options) string {
 	rs := toHiragana(kana)
 	e := emitter{opt: opt, wordStart: true}
 	for i := 0; i < len(rs); {
 		r := rs[i]
 		switch {
-		case r == '\'' || r == '’':
+		case (r == '\'' || r == '’') && e.lastKana && i+1 < len(rs) && isKana(rs[i+1], opt.Kunrei):
+			// A break marker only between two kana; Don't and I'm pass through.
 			e.pendingBreak = true
 			i++
 		case r == 'っ':
-			e.sokuon = true
+			e.sokuon, e.lastKana = true, true
 			i++
 		case r == 'ん':
 			e.hatsuon()
@@ -178,6 +181,9 @@ func Romaji(kana string, opt Options) string {
 			}
 			if v, ok := lookup(string(r), opt.Kunrei); ok {
 				e.mora(v)
+				// を is only ever the particle o (添え書き 7), so をう / をお is
+				// two vowels, never a long one: treat it as a marked break.
+				e.pendingBreak = r == 'を'
 			} else {
 				e.raw(r)
 			}
@@ -187,12 +193,23 @@ func Romaji(kana string, opt Options) string {
 	return string(e.out)
 }
 
+// isKana reports whether r is a kana this package converts (after
+// toHiragana), including the three that have no table entry of their own.
+func isKana(r rune, kunrei bool) bool {
+	if r == 'っ' || r == 'ん' || r == 'ー' {
+		return true
+	}
+	_, ok := lookup(string(r), kunrei)
+	return ok
+}
+
 type emitter struct {
 	opt          Options
 	out          []rune
 	sokuon       bool // a っ waiting for its consonant (添え書き 2)
 	pendingN     bool // an ん just written; needs ' before a vowel or y (添え書き 4)
 	pendingBreak bool // an apostrophe seen in the input
+	lastKana     bool // the last rune consumed was kana
 	wordStart    bool
 	prevVowel    rune // last vowel letter written and still open for lengthening
 }
@@ -206,6 +223,7 @@ func (e *emitter) write(r rune) {
 }
 
 func (e *emitter) mora(r string) {
+	e.lastKana = true
 	first := rune(r[0])
 	if e.pendingN {
 		if isVowel(first) || first == 'y' {
@@ -259,7 +277,7 @@ func (e *emitter) lengthen(v rune) {
 }
 
 func (e *emitter) hatsuon() {
-	e.sokuon = false
+	e.lastKana, e.sokuon = true, false
 	e.write('n')
 	e.prevVowel = 0
 	e.pendingN, e.pendingBreak = true, false
@@ -267,6 +285,7 @@ func (e *emitter) hatsuon() {
 
 // choon handles ー, which has no kana of its own to double.
 func (e *emitter) choon() {
+	e.lastKana = true
 	e.pendingN, e.pendingBreak, e.sokuon = false, false, false
 	if e.prevVowel == 0 {
 		e.out = append(e.out, '-')
@@ -281,6 +300,7 @@ func (e *emitter) choon() {
 }
 
 func (e *emitter) raw(r rune) {
+	e.lastKana = false
 	e.pendingN, e.pendingBreak, e.sokuon = false, false, false
 	switch r {
 	case '、':
@@ -344,13 +364,13 @@ func parseWord(w []rune) ([]rune, bool) {
 			next = w[i+1]
 		}
 		switch {
-		case c == '\'' || c == '’':
+		case isApostrophe(c):
 			out = append(out, '\'')
 			i++
 		case c == 'm' && (next == 'b' || next == 'm' || next == 'p'):
 			out = append(out, 'ん') // Shimbashi, ramma, tempura (添え書き 8)
 			i++
-		case c == 'n' && (next == 0 || next == '\'' || next == '’' || (!isVowel(next) && next != 'y')):
+		case c == 'n' && (next == 0 || isApostrophe(next) || (!isVowel(next) && next != 'y')):
 			out = append(out, 'ん')
 			i++
 		case c == 't' && next == 'c' && i+2 < len(w) && w[i+2] == 'h':
@@ -382,7 +402,25 @@ func parseWord(w []rune) ([]rune, bool) {
 	return out, true
 }
 
-func isWordRune(r rune) bool { return unicode.IsLetter(r) || r == '\'' || r == '’' }
+func isApostrophe(r rune) bool { return r == '\'' || r == '’' }
+
+// wordEnd returns the index just past the romaji word starting at the
+// letter rs[i]. An apostrophe is part of the word only between two letters
+// (tan'i), so quotes around a word are left to the caller.
+func wordEnd(rs []rune, i int) int {
+	j := i
+	for j < len(rs) {
+		switch {
+		case unicode.IsLetter(rs[j]):
+			j++
+		case isApostrophe(rs[j]) && j+1 < len(rs) && unicode.IsLetter(rs[j+1]):
+			j++
+		default:
+			return j
+		}
+	}
+	return j
+}
 
 // Normalize rewrites romaji into the notice's spelling: 1954 第1表 spellings
 // (si → shi, tu → tsu, hu → fu, zi → ji, sya → sha, tya → cha …), m before
@@ -397,15 +435,12 @@ func Normalize(romaji string, opt Options) string {
 	rs := []rune(romaji)
 	var out []rune
 	for i := 0; i < len(rs); {
-		if !isWordRune(rs[i]) {
+		if !unicode.IsLetter(rs[i]) {
 			out = append(out, rs[i])
 			i++
 			continue
 		}
-		j := i
-		for j < len(rs) && isWordRune(rs[j]) {
-			j++
-		}
+		j := wordEnd(rs, i)
 		out = append(out, normalizeWord(rs[i:j], opt)...)
 		i = j
 	}

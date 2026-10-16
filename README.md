@@ -97,9 +97,9 @@ exactly as it was, which is how `Line` and `Ohtawara` survive above.
 | 1 | 撥音 ん is `n` (`shinbun`, not `shimbun`) | always `n`; `Normalize` turns `m` before b/m/p back into `n` |
 | 2 | 促音 っ doubles the next consonant; for `sh`/`ch` the first letter (`zasshi`, `nicchoku`) | first letter of the next mora; `Normalize` reads `tch` as っ |
 | 3 | long vowels: macron, or `^` if needed, or doubled letters as in 現代仮名遣い; イ列 and エ列+い are usually doubled (`kawaii`, `Heisei`) | `Macron` / `Circumflex` / `Doubled`; `ii` and `ei` stay two letters in every style |
-| 4 | `'` separates ん from a following vowel or y (`tan'i`, `ton'ya`) and marks a non-long vowel pair (`oo'oji`, `ko'uta`) | automatic after ん; an apostrophe in the kana input marks the break and is written only where the letters would otherwise merge (`oo'oji` doubled, `ōoji` with a macron) |
+| 4 | `'` separates ん from a following vowel or y (`tan'i`, `ton'ya`) and marks a non-long vowel pair (`oo'oji`, `ko'uta`) | automatic after ん and after the particle を (`utao'utau`); an apostrophe between two kana marks the break and is written only where the letters would otherwise merge (`oo'oji` doubled, `ōoji` with a macron); an apostrophe anywhere else (`Don't`) passes through |
 | 5 | `-` may join the parts of a compound (`Kutani-yaki`) | hyphens pass through and do not start a new word for `Capitalize` |
-| 6, 7 | proper nouns and sentences start with a capital; `，` and `．`; は/へ/を are `wa`/`e`/`o` | `Capitalize`; 、。 become `,` `.`; を is `o` from the 本表 — は and へ are **not** detected, see Limitations |
+| 6, 7 | proper nouns and sentences start with a capital; `，` and `．`; は/へ/を are `wa`/`e`/`o` | `Capitalize`; 、。 become `,` `.`; を is `o` from the 本表 and never lengthens into a following う/お — は and へ are **not** detected, see Limitations |
 | 8 | spellings from other fields (`Tokyo`, `judo`, `Ohtawara`, `Shimbashi`, `tempura`, `matcha`) are not forced to change | `Normalize` rewrites the last three; the first three cannot be recovered from the short spelling and are left alone |
 | 9 | personal and organisation names follow the bearer's wish | the 1954 第2表 spellings the notice names as used in proper nouns (`di du dya dyu dyo wo kwa gwa`) are never rewritten |
 | 対照表 | 22 rows against both 1954 tables | `Kunrei: true` spells with the first; `Normalize` maps its spellings to the 本表 and, with `Kunrei`, back |
@@ -116,7 +116,8 @@ four threads above, and — by fuzzing — that `Normalize` is idempotent and th
   [`ikawaha/kagome`](https://github.com/ikawaha/kagome) first.
 - **Particles は and へ are not detected** — that needs grammar, not a table.
   Write わ and え in the kana, or post-process. を is always `o`, which is what
-  the 本表 says.
+  the 本表 says, and is treated as a word boundary for long vowels (うたをうたう
+  → `utao'utau`); a non-particle を (archaic をとめ) gets the same treatment.
 - **Long vowels need the kana.** おう always merges to `ō`; a genuine two-vowel
   boundary (大伯父 おお'おじ, 小唄 こ'うた) has to be marked with an apostrophe
   in the input, exactly as the notice does in print. `Normalize` on a macron
@@ -131,7 +132,9 @@ four threads above, and — by fuzzing — that `Normalize` is idempotent and th
   In `Normalize`, `tu`, `ti` and `tyu` are read as the 対照表 rows つ, ち, ちゅ,
   so `tisshu` becomes `chisshu`.
 - `Normalize` does not know `oh` for a long o (`Ohtawara`), `nn` for ん before a
-  vowel in typing style, or `l`/`x`/`q` — such words are left untouched.
+  vowel in typing style, or `l`/`x`/`q` — such words are left untouched. Quotes
+  around a word are not part of it (`'Tokyo'` stays `'Tokyo'`); only an
+  apostrophe between two letters is read as the 添え書き 4 break (`tan'i`).
 - Half-width katakana (ｶﾀｶﾅ) are not folded; normalise with NFKC first.
 - っ with nothing after it is dropped; ー with nothing before it is `-`;
   ヵ/ヶ pass through; the apostrophe written is ASCII `'`, where the notice
