@@ -11,6 +11,7 @@ func TestRegress20261016_RomajiKeepsApostropheOutsideKana(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Don't", "Don't"},
 		{"I’m going to とうきょう", "I’m going to tōkyō"},
+		{"'とうきょう'", "'tōkyō'"}, // a quote before kana is not a break marker
 	}
 	for _, tc := range cases {
 		if got := Romaji(tc.in, Options{}); got != tc.want {
